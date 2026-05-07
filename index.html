@@ -108,7 +108,12 @@
 
         input[type="file"] { display: none; }
 
-        @media print { .no-print { display: none !important; } .print-only { display: block !important; } }
+        .print-only { display: none !important; }
+        @media print {
+            .no-print { display: none !important; }
+            .print-only { display: block !important; }
+            #final-composition img { max-width: 100%; height: auto; page-break-inside: avoid; }
+        }
         .a-enter-vr { display: none !important; }
 
         #ra-view a-scene {
@@ -119,7 +124,7 @@
         /* Utilitários (substituem Tailwind CDN — sem aviso de “produção”) */
         .hidden { display: none !important; }
         .app-shell {
-            height: 100%;
+            flex: 1;
             min-height: 0;
             display: flex;
             flex-direction: column;
@@ -386,7 +391,7 @@ python -m http.server 8080</code>
                 </button>
 
                 <button type="button" id="btn-print" class="hidden w-full py-3 rounded-2xl border border-white-10 text-10 font-bold uppercase">
-                    Imprimir convite
+                    Imprimir convite (vídeo + moldura)
                 </button>
             </div>
         </div>
@@ -400,7 +405,7 @@ python -m http.server 8080</code>
         <p class="text-10 font-bold mt-4 tracking-wide-ui text-blue-500 uppercase text-center px-6">Processando…<br>Isso pode levar um momento</p>
     </div>
 
-    <div class="print-only hidden p-2 bg-white text-black min-h-screen">
+    <div class="print-only p-2 bg-white text-black min-h-screen">
         <div id="final-composition" class="w-full"></div>
     </div>
 
@@ -691,14 +696,111 @@ python -m http.server 8080</code>
             }
         };
 
-        function createMergedImage() {
+        /** Extrai um frame do vídeo gravado (o que será visto no RA), para imprimir igual ao marcador usado no app. */
+        function extractVideoFrameBlob(vBlob) {
+            const main = new Promise((resolve, reject) => {
+                if (!vBlob || vBlob.size === 0) {
+                    reject(new Error('Vídeo vazio'));
+                    return;
+                }
+                const url = URL.createObjectURL(vBlob);
+                const video = document.createElement('video');
+                video.muted = true;
+                video.playsInline = true;
+                video.setAttribute('playsinline', '');
+                video.setAttribute('webkit-playsinline', '');
+                video.preload = 'auto';
+                video.src = url;
+
+                let settled = false;
+                const done = (err, blob) => {
+                    if (settled) return;
+                    settled = true;
+                    URL.revokeObjectURL(url);
+                    video.removeAttribute('src');
+                    try { video.load(); } catch (e2) { /* noop */ }
+                    video.remove();
+                    if (err) reject(err);
+                    else resolve(blob);
+                };
+
+                const snapFrame = () => {
+                    try {
+                        const w = video.videoWidth;
+                        const h = video.videoHeight;
+                        if (!w || !h) {
+                            done(new Error('Vídeo sem dimensões'));
+                            return;
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = w;
+                        canvas.height = h;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0);
+                        canvas.toBlob((blob) => {
+                            if (!blob) done(new Error('Falha ao gerar imagem do vídeo'));
+                            else done(null, blob);
+                        }, 'image/jpeg', 0.92);
+                    } catch (e) {
+                        done(e);
+                    }
+                };
+
+                const runAfterLoad = () => {
+                    const d = video.duration;
+                    const t = Number.isFinite(d) && d > 0.15 ? Math.min(0.45, d * 0.35) : 0;
+                    const afterSeek = () => snapFrame();
+
+                    if (t <= 0) {
+                        requestAnimationFrame(() => requestAnimationFrame(afterSeek));
+                        return;
+                    }
+                    const onSeeked = () => {
+                        video.removeEventListener('seeked', onSeeked);
+                        afterSeek();
+                    };
+                    video.addEventListener('seeked', onSeeked);
+                    try {
+                        video.currentTime = t;
+                    } catch (e) {
+                        afterSeek();
+                    }
+                };
+
+                video.addEventListener('error', () => done(new Error('Não foi possível ler o vídeo')), { once: true });
+
+                let loadHandled = false;
+                const onReady = () => {
+                    if (loadHandled) return;
+                    loadHandled = true;
+                    const tryPlay = video.play();
+                    if (tryPlay && typeof tryPlay.then === 'function') {
+                        tryPlay.then(() => { video.pause(); runAfterLoad(); }).catch(() => runAfterLoad());
+                    } else {
+                        runAfterLoad();
+                    }
+                };
+
+                if (video.readyState >= 2) {
+                    onReady();
+                } else {
+                    video.addEventListener('loadeddata', onReady, { once: true });
+                }
+            });
+            return Promise.race([
+                main,
+                new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado ao ler o vídeo')), 15000)),
+            ]);
+        }
+
+        function mergeBaseImageWithFrame(baseBlob, frameImage) {
             return new Promise((resolve, reject) => {
-                if (!pBlob || !frameImg) {
-                    reject(new Error('Foto ou moldura ausente'));
+                if (!baseBlob || !frameImage) {
+                    reject(new Error('Dados incompletos para mesclar'));
                     return;
                 }
                 const img = new Image();
-                const photoUrl = URL.createObjectURL(pBlob);
+                const baseUrl = URL.createObjectURL(baseBlob);
                 img.onload = () => {
                     try {
                         const canvas = document.createElement('canvas');
@@ -706,34 +808,71 @@ python -m http.server 8080</code>
                         canvas.height = img.height;
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0);
-                        ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
                         canvas.toBlob((blob) => {
-                            URL.revokeObjectURL(photoUrl);
-                            if (!blob) reject(new Error('Falha ao mesclar imagem'));
+                            URL.revokeObjectURL(baseUrl);
+                            if (!blob) reject(new Error('Falha ao mesclar moldura'));
                             else resolve(blob);
                         }, 'image/jpeg', 0.92);
                     } catch (e) {
-                        URL.revokeObjectURL(photoUrl);
+                        URL.revokeObjectURL(baseUrl);
                         reject(e);
                     }
                 };
                 img.onerror = () => {
-                    URL.revokeObjectURL(photoUrl);
-                    reject(new Error('Foto inválida'));
+                    URL.revokeObjectURL(baseUrl);
+                    reject(new Error('Imagem base inválida'));
                 };
-                img.src = photoUrl;
+                img.src = baseUrl;
             });
         }
 
+        /**
+         * Convite final: moldura sobre um frame do VÍDEO (prioridade), para bater com o que o RA mostra.
+         * Se o frame do vídeo falhar, usa a foto da câmera.
+         */
+        async function createMergedImage() {
+            if (!frameImg) {
+                throw new Error('Moldura ausente');
+            }
+            let baseBlob = null;
+            if (vBlob && vBlob.size > 0) {
+                try {
+                    baseBlob = await extractVideoFrameBlob(vBlob);
+                } catch (e) {
+                    console.warn('Frame do vídeo indisponível, usando foto:', e);
+                }
+            }
+            if (!baseBlob && pBlob) {
+                baseBlob = pBlob;
+            }
+            if (!baseBlob) {
+                throw new Error('Precisa da foto ou do vídeo para montar o convite');
+            }
+            return mergeBaseImageWithFrame(baseBlob, frameImg);
+        }
+
         document.getElementById('btn-print').onclick = async () => {
+            const finalEl = document.getElementById('final-composition');
             try {
+                if (loader) {
+                    loader.classList.remove('hidden');
+                    const p = loader.querySelector('p');
+                    if (p) p.textContent = 'Montando imagem para impressão…';
+                }
                 const blob = await createMergedImage();
                 const url = URL.createObjectURL(blob);
-                document.getElementById('final-composition').innerHTML = `<img src="${url}" class="print-img-fullwidth" alt="Convite">`;
+                finalEl.innerHTML = `<img src="${url}" class="print-img-fullwidth" alt="Convite: frame do vídeo com moldura">`;
+                const revoke = () => URL.revokeObjectURL(url);
+                window.addEventListener('afterprint', revoke, { once: true });
+                setTimeout(revoke, 120000);
                 window.print();
             } catch (e) {
                 console.error(e);
-                alert('Não foi possível preparar a impressão.');
+                alert('Não foi possível preparar a impressão: ' + (e && e.message ? e.message : e));
+            } finally {
+                if (loader) loader.classList.add('hidden');
+                resetLoaderText();
             }
         };
 
