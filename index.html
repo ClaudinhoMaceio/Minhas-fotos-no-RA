@@ -5,1039 +5,843 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="RA Studio">
-    <title>RA Studio Pro PWA</title>
-
-    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJuYW1lIjogIlJBIFN0dWRpbyBQcm8iLAogICJzaG9ydF9uYW1lIjogIlJBTW9iaWxlIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwMDAwMDAiLAogICJ0aGVtZV9jb2xvciI6ICIjMDAwMDAwIgp9">
-
-    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
-
+    <title>RA Studio — Convite com vídeo</title>
+    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJuYW1lIjogIlJBIFN0dWRpbyIsCiAgInNob3J0X25hbWUiOiAiUkEiLAogICJzdGFydF91cmwiOiAiLiIsCiAgImRpc3BsYXkiOiAiZnVsbHNjcmVlbiIsCiAgImJhY2tncm91bmRfY29sb3IiOiAiIzAwMDAwMCIsCiAgInRoZW1lX2NvbG9yIjogIiMwMDAwMDAiCn0=">
     <style>
-        :root { --ios-bg: #1c1c1e; --accent: #0a84ff; }
-        html, body {
-            height: 100%;
-            margin: 0;
+        :root {
+            --bg: #000;
+            --sheet: #1c1c1e;
+            --accent: #0a84ff;
+            --warn-bg: linear-gradient(180deg, #2d1f00, #1a1200);
         }
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; }
         body {
-            background-color: #000;
+            background: var(--bg);
             color: #fff;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            overscroll-behavior: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
-            min-height: 100vh;
+            overscroll-behavior: none;
+        }
+
+        .layout {
+            display: flex;
+            flex-direction: column;
+            min-height: 100%;
             min-height: 100dvh;
         }
 
-        .viewport-mobile {
-            height: 70vh;
-            min-height: 0;
-            width: 100%;
-            position: relative;
-            background: #000;
-            overflow: hidden;
-            border-radius: 0 0 30px 30px;
-        }
-
-        #camera-feed {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 1;
-            transform: scaleX(1);
-            transition: opacity 0.15s ease;
-        }
-
-        #camera-feed.mirror {
-            transform: scaleX(-1);
-        }
-
-        #frame-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 10;
-            object-fit: cover;
-            display: none;
-        }
-
-        .safe-area-top { padding-top: env(safe-area-inset-top); }
-        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
-
-        .btn-main {
-            width: 72px;
-            height: 72px;
-            border: 4px solid #fff;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255,255,255,0.1);
-            position: relative;
-        }
-        .btn-main-inner {
-            width: 54px;
-            height: 54px;
-            background: #fff;
-            border-radius: 50%;
-            transition: all 0.3s;
-        }
-
-        .recording .btn-main-inner { background: #ff3b30; border-radius: 10px; transform: scale(0.7); animation: pulse 1s infinite; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-
-        .config-sheet {
-            background: var(--ios-bg);
-            border-radius: 30px 30px 0 0;
-            padding: 20px;
-            flex: 1;
-            min-height: 30vh;
-            margin-top: -25px;
-            position: relative;
-            z-index: 20;
-            overflow-y: auto;
-        }
-
-        .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); }
-
-        input[type="file"] { display: none; }
-
-        .print-only { display: none !important; }
-        @media print {
-            .no-print { display: none !important; }
-            .print-only { display: block !important; }
-            #final-composition img { max-width: 100%; height: auto; page-break-inside: avoid; }
-        }
-        .a-enter-vr { display: none !important; }
-
-        #ra-view a-scene {
-            width: 100%;
-            height: 100%;
-        }
-
-        /* Utilitários (substituem Tailwind CDN — sem aviso de “produção”) */
-        .hidden { display: none !important; }
-        .app-shell {
-            flex: 1;
-            min-height: 0;
-            display: flex;
-            flex-direction: column;
-        }
-        .absolute { position: absolute; }
-        .fixed { position: fixed; }
-        .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
-        .top-10 { top: 2.5rem; }
-        .top-12 { top: 3rem; }
-        .right-6 { right: 1.5rem; }
-        .left-0 { left: 0; }
-        .right-0 { right: 0; }
-        .left-4 { left: 1rem; }
-        .right-4 { right: 1rem; }
-        .bottom-12 { bottom: 3rem; }
-        .z-30 { z-index: 30; }
-        .z-100 { z-index: 100; }
-        .z-200 { z-index: 200; }
-        .flex { display: flex; }
-        .flex-col { flex-direction: column; }
-        .flex-grow { flex-grow: 1; }
-        .items-center { align-items: center; }
-        .justify-center { justify-content: center; }
-        .justify-between { justify-content: space-between; }
-        .justify-around { justify-content: space-around; }
-        .gap-2 { gap: 0.5rem; }
-        .gap-4 { gap: 1rem; }
-        .min-w-0 { min-width: 0; }
-        .w-full { width: 100%; }
-        .h-auto { height: auto; }
-        .w-10 { width: 2.5rem; }
-        .h-10 { height: 2.5rem; }
-        .w-12 { width: 3rem; }
-        .h-12 { height: 3rem; }
-        .w-5 { width: 1.25rem; }
-        .h-5 { height: 1.25rem; }
-        .w-6 { width: 1.5rem; }
-        .h-6 { height: 1.5rem; }
-        .w-2 { width: 0.5rem; }
-        .h-2 { height: 0.5rem; }
-        .h-1\.5 { height: 0.375rem; }
-        .p-2 { padding: 0.5rem; }
-        .p-4 { padding: 1rem; }
-        .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
-        .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
-        .px-10 { padding-left: 2.5rem; padding-right: 2.5rem; }
-        .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
-        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
-        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
-        .py-4 { padding-top: 1rem; padding-bottom: 1rem; }
-        .px-4 { padding-left: 1rem; padding-right: 1rem; }
-        .px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
-        .mt-2 { margin-top: 0.5rem; }
-        .mt-4 { margin-top: 1rem; }
-        .mb-6 { margin-bottom: 1.5rem; }
-        .mx-auto { margin-left: auto; margin-right: auto; }
-        .rounded-full { border-radius: 9999px; }
-        .rounded-2xl { border-radius: 1rem; }
-        .rounded-xl { border-radius: 0.75rem; }
-        .text-center { text-align: center; }
-        .text-xs { font-size: 0.75rem; line-height: 1rem; }
-        .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
-        .text-10 { font-size: 10px; line-height: 1.25; }
-        .font-bold { font-weight: 700; }
-        .font-black { font-weight: 900; }
-        .uppercase { text-transform: uppercase; }
-        .tracking-widest { letter-spacing: 0.1em; }
-        .tracking-wide-ui { letter-spacing: 0.3em; }
-        .opacity-50 { opacity: 0.5; }
-        .text-gray-400 { color: #9ca3af; }
-        .text-gray-500 { color: #6b7280; }
-        .text-blue-400 { color: #60a5fa; }
-        .text-blue-500 { color: #3b82f6; }
-        .bg-red-500 { background-color: #ef4444; }
-        .bg-green-500 { background-color: #22c55e; }
-        .bg-black { background-color: #000; }
-        .bg-white { background-color: #fff; }
-        .text-black { color: #000; }
-        .bg-gray-800 { background-color: #1f2937; }
-        .border { border-width: 1px; border-style: solid; }
-        .border-4 { border-width: 4px; }
-        .border-white-10 { border-color: rgba(255,255,255,0.1); }
-        .border-white-20 { border-color: rgba(255,255,255,0.2); }
-        .border-t-blue-500 { border-top-color: #3b82f6; }
-        .border-blue-500-20 { border-color: rgba(59,130,246,0.2); }
-        .bg-white-20 { background-color: rgba(255,255,255,0.2); }
-        .bg-white-10a { background-color: rgba(255,255,255,0.1); }
-        .bg-blue-500-20 { background-color: rgba(59,130,246,0.2); }
-        .bg-white-20-bar { background-color: rgba(255,255,255,0.2); }
-        .truncate {
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-        .cursor-pointer { cursor: pointer; }
-        .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4,0,0.2,1); transition-duration: 150ms; }
-        label.upload-row:active { background: rgba(255,255,255,0.1); }
-        .space-y-3 > * + * { margin-top: 0.75rem; }
-        .backdrop-blur-lg { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-        .min-h-screen { min-height: 100vh; }
-        .dot-frame--ok {
-            box-shadow: 0 0 10px #22c55e;
-        }
-        .btn-build:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .animate-spin {
-            animation: spin 1s linear infinite;
-        }
-        .loader-spin {
-            width: 3rem;
-            height: 3rem;
-            border: 4px solid rgba(59,130,246,0.2);
-            border-top-color: #3b82f6;
-            border-radius: 9999px;
-            animation: spin 1s linear infinite;
-        }
-        .close-ra-btn {
-            position: fixed;
-            top: 3rem;
-            right: 1.5rem;
-            z-index: 200;
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
-            padding: 0.5rem 1rem;
-            border-radius: 0.75rem;
-            font-size: 10px;
-            font-weight: 700;
-            border: 1px solid rgba(255,255,255,0.2);
-            color: #fff;
-            cursor: pointer;
-        }
-        .print-img-fullwidth {
-            width: 100%;
-            height: auto;
-        }
-
-        /* Aviso file:// — no fluxo da página (empurra a UI para baixo, nada fica “por baixo”) */
-        #file-protocol-wall {
+        #warn-file {
             display: none;
             flex-shrink: 0;
-            background: linear-gradient(180deg, #2d1f00 0%, #1a1200 100%);
-            color: #fff;
-            padding: 0.75rem 1rem;
-            padding-top: max(0.75rem, env(safe-area-inset-top));
+            background: var(--warn-bg);
+            padding: 10px 14px;
+            padding-top: max(10px, env(safe-area-inset-top));
             font-size: 12px;
-            line-height: 1.45;
-            border-bottom: 1px solid rgba(251, 191, 36, 0.4);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+            line-height: 1.4;
+            border-bottom: 1px solid rgba(251, 191, 36, 0.35);
         }
-        #file-protocol-wall.is-visible {
-            display: block;
-        }
-        #file-protocol-wall h2 {
-            font-size: 0.85rem;
-            margin: 0 0 0.35rem;
-            color: #fcd34d;
-        }
-        #file-protocol-wall code {
+        #warn-file.show { display: block; }
+        #warn-file h3 { margin: 0 0 6px; font-size: 13px; color: #fcd34d; }
+        #warn-file code {
             display: block;
             background: #0c0a09;
-            padding: 0.5rem 0.65rem;
+            padding: 8px;
             border-radius: 6px;
-            margin: 0.4rem 0;
             font-size: 11px;
-            overflow-x: auto;
+            margin: 6px 0;
             white-space: pre-wrap;
             word-break: break-all;
         }
-        #file-protocol-wall .file-wall-actions {
-            margin-top: 0.5rem;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            align-items: center;
-        }
-        #file-protocol-wall button {
+        #warn-file .actions { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        #warn-dismiss {
             font: inherit;
-            cursor: pointer;
-            padding: 0.4rem 0.75rem;
-            border-radius: 8px;
-            border: none;
             font-size: 11px;
             font-weight: 700;
-        }
-        #btn-dismiss-file-wall {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 8px;
             background: #fbbf24;
             color: #1c1917;
+            cursor: pointer;
         }
-        #file-protocol-wall .note {
-            margin-top: 0.35rem;
+
+        .stage-wrap {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+        }
+
+        .viewport {
+            height: 62vh;
+            min-height: 200px;
+            position: relative;
+            background: #000;
+            border-radius: 0 0 24px 24px;
+            overflow: hidden;
+        }
+        #camera-feed {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            z-index: 1;
+            transition: opacity 0.12s ease;
+        }
+        #camera-feed.mirror { transform: scaleX(-1); }
+        #frame-overlay {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            pointer-events: none;
+            z-index: 2;
+            display: none;
+        }
+
+        .hud {
+            position: absolute;
+            left: 12px;
+            right: 12px;
+            top: max(12px, env(safe-area-inset-top));
+            z-index: 10;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 11px;
+            border-radius: 999px;
             font-size: 10px;
-            color: #a8a29e;
+            font-weight: 700;
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.12);
+            backdrop-filter: blur(12px);
+        }
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; }
+        .dot.ok { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+
+        .btn-round {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,.15);
+            background: rgba(255,255,255,.08);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        .btn-round svg { width: 20px; height: 20px; }
+
+        .shutter-row {
+            position: absolute;
+            bottom: max(16px, env(safe-area-inset-bottom));
+            left: 0;
+            right: 0;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 0 28px;
+            z-index: 10;
+        }
+        .shutter {
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            border: 4px solid #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,.1);
+            cursor: pointer;
+            padding: 0;
+        }
+        .shutter-inner {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #fff;
+            transition: transform .2s, border-radius .2s, background .2s;
+        }
+        .rec-on .shutter-inner {
+            background: #ff3b30;
+            border-radius: 9px;
+            transform: scale(.72);
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse { 50% { opacity: .55; } }
+        .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; opacity: .5; margin-top: 6px; text-align: center; }
+
+        .panel {
+            flex: 1;
+            background: var(--sheet);
+            border-radius: 22px 22px 0 0;
+            margin-top: -18px;
+            padding: 16px 18px 22px;
+            padding-bottom: max(22px, env(safe-area-inset-bottom));
+            overflow-y: auto;
+            z-index: 15;
+        }
+        .grab { width: 36px; height: 4px; background: rgba(255,255,255,.18); border-radius: 99px; margin: 0 auto 14px; }
+
+        .steps {
+            font-size: 10px;
+            color: #9ca3af;
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        .steps strong { color: #e5e7eb; }
+
+        .card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px;
+            border-radius: 14px;
+            background: rgba(255,255,255,.05);
+            border: 1px solid rgba(255,255,255,.1);
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        .card:active { background: rgba(255,255,255,.08); }
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(59,130,246,.2);
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .card-icon svg { width: 22px; height: 22px; }
+        .card-body { flex: 1; min-width: 0; }
+        .card-body h4 { margin: 0; font-size: 14px; }
+        .card-body p { margin: 2px 0 0; font-size: 10px; color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        input[type="file"] { display: none; }
+
+        #status-hint { font-size: 11px; color: #6b7280; margin: 4px 0 12px; line-height: 1.45; }
+
+        .btn-primary {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 14px;
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: opacity .15s;
+        }
+        .btn-primary:disabled {
+            background: #292524;
+            color: #78716c;
+            cursor: not-allowed;
+            opacity: .85;
+        }
+        .btn-primary:not(:disabled) {
+            background: #fff;
+            color: #000;
+        }
+
+        .btn-secondary {
+            width: 100%;
+            margin-top: 10px;
+            padding: 11px;
+            border-radius: 14px;
+            border: 1px solid rgba(255,255,255,.12);
+            background: transparent;
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+        .btn-secondary.is-hidden { display: none !important; }
+
+        .hidden { display: none !important; }
+
+        /* Impressão: só .print-root na folha */
+        .print-root { display: none !important; }
+        @media print {
+            body * { visibility: hidden !important; }
+            .print-root, .print-root * { visibility: visible !important; }
+            .print-root {
+                display: block !important;
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 100%;
+                min-height: 100%;
+                margin: 0;
+                padding: 12px;
+                background: #fff !important;
+                color: #000 !important;
+            }
+            .print-root img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+        }
+
+        #ra-view {
+            position: fixed;
+            inset: 0;
+            z-index: 500;
+            background: #000;
+        }
+        #ra-view a-scene { width: 100%; height: 100%; }
+        .a-enter-vr { display: none !important; }
+
+        #loader {
+            position: fixed;
+            inset: 0;
+            z-index: 600;
+            background: rgba(0,0,0,.92);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        #loader.show { display: flex; }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(59,130,246,.25);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin .8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #loader-msg {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .2em;
+            text-transform: uppercase;
+            color: var(--accent);
+            text-align: center;
+            padding: 0 24px;
+            line-height: 1.5;
+        }
+
+        .close-ra {
+            position: fixed;
+            top: max(16px, env(safe-area-inset-top));
+            right: 14px;
+            z-index: 700;
+            padding: 8px 14px;
+            font-size: 10px;
+            font-weight: 700;
+            border-radius: 10px;
+            border: 1px solid rgba(255,255,255,.2);
+            background: rgba(255,255,255,.15);
+            color: #fff;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
-
-    <div class="no-print" style="display:flex;flex-direction:column;min-height:100%;min-height:100dvh;">
-    <div id="file-protocol-wall" role="alert" aria-live="polite">
-        <h2>Câmera e RA precisam de http://localhost (recomendado)</h2>
-        <p>Você abriu o arquivo direto do disco (<code>file://</code>). A câmera e o A-Frame costumam falhar assim. Use um servidor local:</p>
-        <code>cd pasta-do-projeto
-python -m http.server 8080</code>
-        <p>Depois abra <strong>http://localhost:8080</strong> no navegador.</p>
-        <div class="file-wall-actions">
-            <button type="button" id="btn-dismiss-file-wall">Ok, continuar assim mesmo</button>
-            <span class="note">A interface aparece abaixo; a câmera pode não funcionar.</span>
-        </div>
-    </div>
-
-    <div class="app-shell">
-        <div class="viewport-mobile">
-            <video id="camera-feed" autoplay playsinline muted></video>
-            <img id="frame-overlay" src="" alt="Moldura">
-
-            <div class="absolute top-10 left-4 right-4 flex justify-between z-30 safe-area-top">
-                <div class="flex gap-2">
-                    <div class="glass px-3 py-1 rounded-full text-10 font-bold flex items-center gap-2">
-                        <div id="dot-frame" class="w-2 h-2 rounded-full bg-red-500"></div> MOLDURA
-                    </div>
-                </div>
-                <button type="button" id="btn-flip" class="glass w-10 h-10 rounded-full flex items-center justify-center" aria-label="Trocar câmera">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-width="2" stroke-linecap="round"/></svg>
-                </button>
-            </div>
-
-            <div class="absolute bottom-12 left-0 right-0 flex justify-around items-center z-30 px-10">
-                <div class="text-center recording-wrap">
-                    <button type="button" id="snap-photo" class="btn-main"><div class="btn-main-inner"></div></button>
-                    <p class="text-10 mt-2 font-bold opacity-50 uppercase">Foto</p>
-                </div>
-                <div class="text-center recording-wrap">
-                    <button type="button" id="record-video" class="btn-main"><div id="rec-status" class="btn-main-inner bg-red-500"></div></button>
-                    <p class="text-10 mt-2 font-bold opacity-50 uppercase">Vídeo RA</p>
-                </div>
+    <div class="layout">
+        <div id="warn-file" role="alert">
+            <h3>Use http://localhost (recomendado)</h3>
+            <p>Você abriu o arquivo pelo disco (<code>file://</code>). A câmera e o RA precisam de servidor HTTP.</p>
+            <code>python -m http.server 8080</code>
+            <p style="margin:6px 0 0">Abra <strong>http://localhost:8080</strong></p>
+            <div class="actions">
+                <button type="button" id="warn-dismiss">Continuar assim mesmo</button>
+                <span style="font-size:10px;color:#a8a29e">Abaixo a interface funciona; câmera pode falhar.</span>
             </div>
         </div>
 
-        <div class="config-sheet safe-area-bottom">
-            <div class="w-10 h-1.5 bg-white-20-bar rounded-full mx-auto mb-6"></div>
+        <div class="stage-wrap no-print">
+            <div class="viewport">
+                <video id="camera-feed" autoplay playsinline muted></video>
+                <img id="frame-overlay" alt="Moldura">
 
-            <div class="space-y-3">
-                <label for="input-frame" class="upload-row flex items-center gap-4 p-4 glass rounded-2xl cursor-pointer">
-                    <div class="w-10 h-10 rounded-full bg-blue-500-20 flex items-center justify-center text-blue-400">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-width="2"/></svg>
+                <div class="hud">
+                    <span class="badge"><span id="dot-frame" class="dot"></span> Moldura</span>
+                    <button type="button" class="btn-round" id="btn-flip" aria-label="Trocar câmera">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" stroke-linecap="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                    </button>
+                </div>
+
+                <div class="shutter-row">
+                    <div>
+                        <button type="button" class="shutter" id="snap-photo"><span class="shutter-inner"></span></button>
+                        <div class="lbl">Foto</div>
                     </div>
-                    <div class="flex-grow min-w-0">
-                        <h4 class="text-sm font-bold">Moldura PNG (Retrato)</h4>
-                        <p id="label-frame" class="text-10 text-gray-400 truncate">Escolha um arquivo</p>
+                    <div class="rec-wrap" id="rec-wrap">
+                        <button type="button" class="shutter" id="record-video"><span class="shutter-inner" style="background:#ef4444"></span></button>
+                        <div class="lbl">Vídeo RA</div>
                     </div>
-                    <input type="file" id="input-frame" accept="image/png,image/*">
+                </div>
+            </div>
+
+            <div class="panel safe-area-bottom">
+                <div class="grab"></div>
+                <div class="steps"><strong>1</strong> Moldura &nbsp;·&nbsp; <strong>2</strong> Foto &nbsp;·&nbsp; <strong>3</strong> Vídeo &nbsp;·&nbsp; <strong>4</strong> Gerar RA / imprimir</div>
+
+                <label class="card" for="input-frame">
+                    <div class="card-icon">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                    </div>
+                    <div class="card-body">
+                        <h4>Moldura (PNG / JPG)</h4>
+                        <p id="label-frame">Toque para escolher arquivo</p>
+                    </div>
+                    <input type="file" id="input-frame" accept="image/png,image/jpeg,image/webp,image/*">
                 </label>
 
-                <p id="status-hint" class="text-10 text-gray-500 px-1">Passos: moldura → foto → vídeo curto → gerar RA.</p>
+                <p id="status-hint">Carregando…</p>
 
-                <button type="button" id="btn-build" disabled class="w-full py-4 rounded-2xl bg-gray-800 text-gray-500 font-black uppercase text-xs tracking-widest transition-all btn-build">
-                    Aguardando dados
-                </button>
-
-                <button type="button" id="btn-print" class="hidden w-full py-3 rounded-2xl border border-white-10 text-10 font-bold uppercase">
-                    Imprimir convite (vídeo + moldura)
-                </button>
+                <button type="button" class="btn-primary" id="btn-build" disabled>Gerar experiência RA</button>
+                <button type="button" class="btn-secondary is-hidden" id="btn-print">Imprimir convite</button>
             </div>
         </div>
     </div>
+
+    <div id="ra-view" class="hidden" aria-hidden="true"></div>
+
+    <div id="loader"><div class="spinner"></div><p id="loader-msg">Aguarde…</p></div>
+
+    <div class="print-root" id="print-root" aria-hidden="true">
+        <div id="final-composition"></div>
     </div>
 
-    <div id="ra-view" class="fixed inset-0 z-100 hidden bg-black" aria-hidden="true"></div>
-
-    <div id="loader" class="hidden fixed inset-0 z-200 bg-black flex flex-col items-center justify-center">
-        <div class="loader-spin" aria-hidden="true"></div>
-        <p class="text-10 font-bold mt-4 tracking-wide-ui text-blue-500 uppercase text-center px-6">Processando…<br>Isso pode levar um momento</p>
-    </div>
-
-    <div class="print-only p-2 bg-white text-black min-h-screen">
-        <div id="final-composition" class="w-full"></div>
-    </div>
-
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
     <script>
-        if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-            window.addEventListener('load', () => {
-                try {
-                    const swCode = `
-                        const CACHE_NAME = 'ra-studio-v2';
-                        self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME)));
-                        self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
-                    `;
-                    const blob = new Blob([swCode], { type: 'application/javascript' });
-                    const swUrl = URL.createObjectURL(blob);
-                    if (!window.location.href.includes('usercontent.goog')) {
-                        navigator.serviceWorker.register(swUrl).catch(() => {});
-                    }
-                } catch (e) {
-                    console.warn('Service Worker ignorado:', e);
-                }
+(function () {
+    'use strict';
+
+    var COMPILE_W = 384;
+
+    var el = function (id) { return document.getElementById(id); };
+    var video = el('camera-feed');
+    var overlay = el('frame-overlay');
+    var buildBtn = el('btn-build');
+    var printBtn = el('btn-print');
+    var loader = el('loader');
+    var loaderMsg = el('loader-msg');
+    var hint = el('status-hint');
+    var recWrap = el('rec-wrap');
+
+    var stream = null;
+    var recorder = null;
+    var chunks = [];
+    var photoBlob = null;
+    var videoBlob = null;
+    var frameImage = null;
+    var facing = 'environment';
+    var recording = false;
+
+    function setHint(t) { if (hint) hint.textContent = t; }
+    function showLoader(show, msg) {
+        if (!loader) return;
+        loader.classList.toggle('show', !!show);
+        if (loaderMsg && msg) loaderMsg.textContent = msg;
+    }
+
+    function pickMime() {
+        var types = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm', 'video/mp4'];
+        for (var i = 0; i < types.length; i++) {
+            if (window.MediaRecorder && MediaRecorder.isTypeSupported(types[i])) return types[i];
+        }
+        return '';
+    }
+
+    async function warmTf() {
+        var tf = window.tf;
+        if (!tf || !tf.setBackend) return;
+        try {
+            await tf.setBackend('webgl');
+            await tf.ready();
+        } catch (e) {
+            try { await tf.setBackend('cpu'); await tf.ready(); } catch (e2) {}
+        }
+    }
+
+    async function initCamera() {
+        if (!video || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            setHint('Câmera não disponível neste navegador ou sem permissão.');
+            return;
+        }
+        if (stream) {
+            stream.getTracks().forEach(function (t) { t.stop(); });
+            stream = null;
+        }
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: facing, width: { ideal: 1080 }, height: { ideal: 1920 } },
+                audio: true
             });
-        }
-
-        const video = document.getElementById('camera-feed');
-        const overlay = document.getElementById('frame-overlay');
-        const buildBtn = document.getElementById('btn-build');
-        const loader = document.getElementById('loader');
-        const statusHint = document.getElementById('status-hint');
-
-        function resetLoaderText() {
-            if (!loader) return;
-            const p = loader.querySelector('p');
-            if (p) p.innerHTML = 'Processando…<br>Isso pode levar um momento';
-        }
-
-        /** Largura máxima enviada ao MindAR — menor = compilação bem mais rápida (menos pixels no TF). Impressão continua em resolução cheia. */
-        const COMPILE_TARGET_WIDTH = 384;
-
-        /** Preferir GPU no TensorFlow (compilação) para reduzir tempo em desktop e vários celulares. */
-        async function warmUpTfWebGl() {
-            const tf = window.tf;
-            if (!tf || typeof tf.setBackend !== 'function') return;
+        } catch (e) {
             try {
-                await tf.setBackend('webgl');
-                await tf.ready();
-            } catch (e) {
-                try {
-                    await tf.setBackend('cpu');
-                    await tf.ready();
-                } catch (e2) { /* noop */ }
-            }
-        }
-
-        function mindarProgressCb(progress) {
-            if (!loader || typeof progress !== 'number') return;
-            const p = loader.querySelector('p');
-            if (p) {
-                const pct = progress > 0 && progress <= 1 ? Math.round(progress * 100) : Math.round(progress);
-                p.textContent = 'Compilando alvo… ' + pct + '%';
-            }
-        }
-
-        async function compileMindBufferFromInput(input) {
-            const compiler = new window.MINDAR.IMAGE.Compiler();
-            await compiler.compileImageTargets([input], mindarProgressCb);
-            return compiler.exportData();
-        }
-
-        /** Converte canvas em Image via blob (evita toDataURL — strings gigantes deixam tudo lento). */
-        function canvasToImageViaBlob(canvas, quality) {
-            return new Promise((resolve, reject) => {
-                canvas.toBlob((blob) => {
-                    if (!blob) {
-                        reject(new Error('Falha ao exportar imagem'));
-                        return;
-                    }
-                    const url = URL.createObjectURL(blob);
-                    const im = new Image();
-                    im.onload = () => {
-                        URL.revokeObjectURL(url);
-                        resolve(im);
-                    };
-                    im.onerror = () => {
-                        URL.revokeObjectURL(url);
-                        reject(new Error('Falha ao carregar preview'));
-                    };
-                    im.src = url;
-                }, 'image/jpeg', quality);
-            });
-        }
-
-        let mediaStream = null;
-        let mediaRecorder = null;
-        let chunks = [];
-        let pBlob = null;
-        let vBlob = null;
-        let frameImg = null;
-        let mode = 'environment';
-        let recording = false;
-
-        const recordWrap = document.querySelector('#record-video')?.closest('.recording-wrap') ?? null;
-
-        function setHint(text) {
-            if (statusHint) statusHint.textContent = text;
-        }
-
-        function pickRecorderMime() {
-            const candidates = [
-                'video/webm;codecs=vp9,opus',
-                'video/webm;codecs=vp8,opus',
-                'video/webm',
-                'video/mp4',
-            ];
-            for (const c of candidates) {
-                if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c;
-            }
-            return '';
-        }
-
-        async function initCamera(facing) {
-            if (mediaStream) {
-                mediaStream.getTracks().forEach(t => t.stop());
-                mediaStream = null;
-            }
-            const want = facing || mode;
-            try {
-                mediaStream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: want,
-                        width: { ideal: 1080 },
-                        height: { ideal: 1920 },
-                    },
-                    audio: true,
-                });
-            } catch (e) {
-                console.warn('getUserMedia com áudio falhou, tentando só vídeo:', e);
-                try {
-                    mediaStream = await navigator.mediaDevices.getUserMedia({
-                        video: { facingMode: want },
-                    });
-                } catch (err) {
-                    console.error(err);
-                    alert('Permita o uso da câmera (HTTPS ou localhost). No iPhone use Safari.');
-                    return;
-                }
-            }
-
-            video.srcObject = mediaStream;
-            mode = want;
-            video.classList.toggle('mirror', mode === 'user');
-            try {
-                await video.play();
-            } catch (e) {
-                console.warn('video.play():', e);
-            }
-        }
-
-        function updateBuildUi() {
-            if (!buildBtn) return;
-            const ready = !!(pBlob && vBlob && frameImg);
-            buildBtn.disabled = !ready;
-            if (ready) {
-                buildBtn.className = 'w-full py-4 rounded-2xl bg-white text-black font-black uppercase text-xs tracking-widest transition-all btn-build btn-build--ready';
-                buildBtn.textContent = 'Gerar experiência RA';
-                document.getElementById('btn-print').classList.remove('hidden');
-                setHint('Tudo pronto. Toque em gerar RA ou imprimir o convite.');
-            } else {
-                buildBtn.className = 'w-full py-4 rounded-2xl bg-gray-800 text-gray-500 font-black uppercase text-xs tracking-widest transition-all btn-build';
-                buildBtn.textContent = 'Aguardando dados';
-            }
-        }
-
-        function checkStatus() {
-            updateBuildUi();
-        }
-
-        document.getElementById('btn-flip').onclick = () => {
-            if (recording) {
-                alert('Pare a gravação antes de trocar a câmera.');
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
+            } catch (e2) {
+                setHint('Permita a câmera. Use HTTPS ou http://localhost (não abra o arquivo direto).');
                 return;
             }
-            initCamera(mode === 'environment' ? 'user' : 'environment');
-        };
+        }
+        video.srcObject = stream;
+        video.classList.toggle('mirror', facing === 'user');
+        try { await video.play(); } catch (e3) {}
+    }
 
-        document.getElementById('input-frame').onchange = (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                const dataUrl = ev.target.result;
-                overlay.src = dataUrl;
-                overlay.style.display = 'block';
-                frameImg = new Image();
-                frameImg.onload = () => checkStatus();
-                frameImg.onerror = () => {
-                    frameImg = null;
-                    alert('Não foi possível carregar a moldura.');
-                    checkStatus();
-                };
-                frameImg.src = dataUrl;
-                document.getElementById('label-frame').innerText = file.name || 'Moldura pronta';
-                document.getElementById('dot-frame').className = 'w-2 h-2 rounded-full bg-green-500 dot-frame--ok';
-                setHint('Agora capture a foto com a moldura na cena.');
-                checkStatus();
+    function flipCamera() {
+        if (recording) { alert('Pare o vídeo antes de trocar a câmera.'); return; }
+        facing = facing === 'environment' ? 'user' : 'environment';
+        initCamera();
+    }
+
+    function canBuild() {
+        return !!(photoBlob && videoBlob && frameImage);
+    }
+
+    function refreshUi() {
+        var ok = canBuild();
+        if (buildBtn) {
+            buildBtn.disabled = !ok;
+            buildBtn.textContent = ok ? 'Gerar experiência RA' : 'Complete: moldura, foto e vídeo';
+        }
+        if (printBtn) printBtn.classList.toggle('is-hidden', !ok);
+        if (ok) setHint('Pronto. Gere o RA ou imprima o convite.');
+    }
+
+    function onFrameFile(e) {
+        var f = e.target.files && e.target.files[0];
+        if (!f) return;
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+            var u = ev.target.result;
+            overlay.src = u;
+            overlay.style.display = 'block';
+            var img = new Image();
+            img.onload = function () { frameImage = img; refreshUi(); };
+            img.onerror = function () { frameImage = null; alert('Moldura inválida.'); refreshUi(); };
+            img.src = u;
+            var lf = el('label-frame');
+            if (lf) lf.textContent = f.name || 'Moldura carregada';
+            var dot = el('dot-frame');
+            if (dot) dot.classList.add('ok');
+            setHint('Agora tire a foto com a moldura na tela.');
+        };
+        reader.readAsDataURL(f);
+    }
+
+    function takePhoto() {
+        if (!video) return;
+        var w = video.videoWidth, h = video.videoHeight;
+        if (!w || !h) { alert('Espere a câmera carregar.'); return; }
+        var c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        var ctx = c.getContext('2d');
+        if (facing === 'user') { ctx.translate(w, 0); ctx.scale(-1, 1); }
+        ctx.drawImage(video, 0, 0);
+        c.toBlob(function (b) {
+            if (!b) { alert('Erro ao capturar foto.'); return; }
+            photoBlob = b;
+            video.style.opacity = '0.6';
+            setTimeout(function () { video.style.opacity = '1'; }, 100);
+            setHint('Grave o vídeo RA (toque de novo para parar).');
+            refreshUi();
+        }, 'image/jpeg', 0.92);
+    }
+
+    function toggleRecord() {
+        if (!stream) { alert('Câmera inativa.'); return; }
+        if (typeof MediaRecorder === 'undefined') { alert('Gravação não suportada neste aparelho.'); return; }
+        if (!recording) {
+            chunks = [];
+            var mime = pickMime();
+            var opts = mime ? { mimeType: mime } : {};
+            try { recorder = new MediaRecorder(stream, opts); }
+            catch (e) {
+                try { recorder = new MediaRecorder(stream); }
+                catch (e2) { alert('Não foi possível gravar.'); return; }
+            }
+            recorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+            recorder.onstop = function () {
+                var t = (recorder && recorder.mimeType) || mime || 'video/webm';
+                videoBlob = new Blob(chunks, { type: t });
+                recording = false;
+                if (recWrap) recWrap.classList.remove('rec-on');
+                refreshUi();
             };
-            reader.readAsDataURL(file);
-        };
+            recorder.start(200);
+            recording = true;
+            if (recWrap) recWrap.classList.add('rec-on');
+        } else {
+            if (recorder && recorder.state === 'recording') recorder.stop();
+            else { recording = false; if (recWrap) recWrap.classList.remove('rec-on'); }
+        }
+    }
 
-        document.getElementById('snap-photo').onclick = () => {
-            const w = video.videoWidth;
-            const h = video.videoHeight;
-            if (!w || !h) {
-                alert('Câmera ainda não está pronta. Aguarde um instante e tente de novo.');
-                return;
+    function extractVideoFrame(blob) {
+        var inner = new Promise(function (resolve, reject) {
+            if (!blob || !blob.size) { reject(new Error('Vídeo vazio')); return; }
+            var url = URL.createObjectURL(blob);
+            var v = document.createElement('video');
+            v.muted = true;
+            v.playsInline = true;
+            v.setAttribute('playsinline', '');
+            v.preload = 'auto';
+            v.src = url;
+            var done = false;
+            function fin(err, out) {
+                if (done) return;
+                done = true;
+                URL.revokeObjectURL(url);
+                try { v.removeAttribute('src'); v.load(); } catch (e1) {}
+                v.remove();
+                if (err) reject(err); else resolve(out);
             }
-            const canvas = document.createElement('canvas');
-            canvas.width = w;
-            canvas.height = h;
-            const ctx = canvas.getContext('2d');
-            if (mode === 'user') {
-                ctx.translate(canvas.width, 0);
-                ctx.scale(-1, 1);
+            function snap() {
+                var w = v.videoWidth, h = v.videoHeight;
+                if (!w || !h) { fin(new Error('Sem tamanho de vídeo')); return; }
+                var c = document.createElement('canvas');
+                c.width = w; c.height = h;
+                c.getContext('2d').drawImage(v, 0, 0);
+                c.toBlob(function (b) {
+                    if (!b) fin(new Error('Frame inválido'));
+                    else fin(null, b);
+                }, 'image/jpeg', 0.9);
             }
-            ctx.drawImage(video, 0, 0);
-            canvas.toBlob((b) => {
-                if (!b) {
-                    alert('Falha ao gerar a foto.');
-                    return;
-                }
-                pBlob = b;
-                checkStatus();
-                video.style.opacity = '0.5';
-                setTimeout(() => { video.style.opacity = '1'; }, 120);
-                setHint('Ótimo. Grave um vídeo curto para o RA (toque de novo para parar).');
-            }, 'image/jpeg', 0.95);
-        };
-
-        document.getElementById('record-video').onclick = function () {
-            if (!mediaStream) {
-                alert('Câmera não está ativa.');
-                return;
-            }
-            if (typeof MediaRecorder === 'undefined') {
-                alert('Seu navegador não suporta gravação (MediaRecorder). Tente Chrome ou Safari atualizado.');
-                return;
-            }
-
-            if (!recording) {
-                chunks = [];
-                const mime = pickRecorderMime();
-                const options = mime ? { mimeType: mime } : {};
-                try {
-                    mediaRecorder = new MediaRecorder(mediaStream, options);
-                } catch (err) {
-                    console.error(err);
-                    try {
-                        mediaRecorder = new MediaRecorder(mediaStream);
-                    } catch (e2) {
-                        alert('Não foi possível iniciar a gravação neste aparelho.');
-                        return;
-                    }
-                }
-
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) chunks.push(e.data);
-                };
-                mediaRecorder.onstop = () => {
-                    const outType = (mediaRecorder && mediaRecorder.mimeType) || mime || 'video/webm';
-                    vBlob = new Blob(chunks, { type: outType });
-                    recording = false;
-                    if (recordWrap) recordWrap.classList.remove('recording');
-                    checkStatus();
-                    if (!chunks.length) {
-                        alert('Nenhum dado de vídeo foi gravado. Tente outra vez.');
+            v.onerror = function () { fin(new Error('Erro no vídeo')); };
+            v.addEventListener('loadeddata', function onLd() {
+                v.removeEventListener('loadeddata', onLd);
+                var d = v.duration;
+                var t = (typeof d === 'number' && d > 0.12) ? Math.min(0.4, d * 0.3) : 0;
+                var go = function () {
+                    if (t <= 0) requestAnimationFrame(function () { requestAnimationFrame(snap); });
+                    else {
+                        v.addEventListener('seeked', function once() { v.removeEventListener('seeked', once); snap(); });
+                        try { v.currentTime = t; } catch (e2) { snap(); }
                     }
                 };
-
-                mediaRecorder.start(250);
-                recording = true;
-                if (recordWrap) recordWrap.classList.add('recording');
-            } else {
-                if (mediaRecorder && mediaRecorder.state === 'recording') {
-                    mediaRecorder.stop();
-                } else {
-                    recording = false;
-                    if (recordWrap) recordWrap.classList.remove('recording');
-                }
-            }
-        };
-
-        /** Extrai um frame do vídeo gravado (o que será visto no RA), para imprimir igual ao marcador usado no app. */
-        function extractVideoFrameBlob(vBlob) {
-            const main = new Promise((resolve, reject) => {
-                if (!vBlob || vBlob.size === 0) {
-                    reject(new Error('Vídeo vazio'));
-                    return;
-                }
-                const url = URL.createObjectURL(vBlob);
-                const video = document.createElement('video');
-                video.muted = true;
-                video.playsInline = true;
-                video.setAttribute('playsinline', '');
-                video.setAttribute('webkit-playsinline', '');
-                video.preload = 'auto';
-                video.src = url;
-
-                let settled = false;
-                const done = (err, blob) => {
-                    if (settled) return;
-                    settled = true;
-                    URL.revokeObjectURL(url);
-                    video.removeAttribute('src');
-                    try { video.load(); } catch (e2) { /* noop */ }
-                    video.remove();
-                    if (err) reject(err);
-                    else resolve(blob);
-                };
-
-                const snapFrame = () => {
-                    try {
-                        const w = video.videoWidth;
-                        const h = video.videoHeight;
-                        if (!w || !h) {
-                            done(new Error('Vídeo sem dimensões'));
-                            return;
-                        }
-                        const canvas = document.createElement('canvas');
-                        canvas.width = w;
-                        canvas.height = h;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0);
-                        canvas.toBlob((blob) => {
-                            if (!blob) done(new Error('Falha ao gerar imagem do vídeo'));
-                            else done(null, blob);
-                        }, 'image/jpeg', 0.92);
-                    } catch (e) {
-                        done(e);
-                    }
-                };
-
-                const runAfterLoad = () => {
-                    const d = video.duration;
-                    const t = Number.isFinite(d) && d > 0.15 ? Math.min(0.45, d * 0.35) : 0;
-                    const afterSeek = () => snapFrame();
-
-                    if (t <= 0) {
-                        requestAnimationFrame(() => requestAnimationFrame(afterSeek));
-                        return;
-                    }
-                    const onSeeked = () => {
-                        video.removeEventListener('seeked', onSeeked);
-                        afterSeek();
-                    };
-                    video.addEventListener('seeked', onSeeked);
-                    try {
-                        video.currentTime = t;
-                    } catch (e) {
-                        afterSeek();
-                    }
-                };
-
-                video.addEventListener('error', () => done(new Error('Não foi possível ler o vídeo')), { once: true });
-
-                let loadHandled = false;
-                const onReady = () => {
-                    if (loadHandled) return;
-                    loadHandled = true;
-                    const tryPlay = video.play();
-                    if (tryPlay && typeof tryPlay.then === 'function') {
-                        tryPlay.then(() => { video.pause(); runAfterLoad(); }).catch(() => runAfterLoad());
-                    } else {
-                        runAfterLoad();
-                    }
-                };
-
-                if (video.readyState >= 2) {
-                    onReady();
-                } else {
-                    video.addEventListener('loadeddata', onReady, { once: true });
-                }
+                var p = v.play();
+                if (p && p.then) p.then(function () { v.pause(); go(); }).catch(go);
+                else go();
             });
-            return Promise.race([
-                main,
-                new Promise((_, rej) => setTimeout(() => rej(new Error('Tempo esgotado ao ler o vídeo')), 15000)),
-            ]);
-        }
-
-        function mergeBaseImageWithFrame(baseBlob, frameImage) {
-            return new Promise((resolve, reject) => {
-                if (!baseBlob || !frameImage) {
-                    reject(new Error('Dados incompletos para mesclar'));
-                    return;
-                }
-                const img = new Image();
-                const baseUrl = URL.createObjectURL(baseBlob);
-                img.onload = () => {
-                    try {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = img.width;
-                        canvas.height = img.height;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(img, 0, 0);
-                        ctx.drawImage(frameImage, 0, 0, canvas.width, canvas.height);
-                        canvas.toBlob((blob) => {
-                            URL.revokeObjectURL(baseUrl);
-                            if (!blob) reject(new Error('Falha ao mesclar moldura'));
-                            else resolve(blob);
-                        }, 'image/jpeg', 0.92);
-                    } catch (e) {
-                        URL.revokeObjectURL(baseUrl);
-                        reject(e);
-                    }
-                };
-                img.onerror = () => {
-                    URL.revokeObjectURL(baseUrl);
-                    reject(new Error('Imagem base inválida'));
-                };
-                img.src = baseUrl;
-            });
-        }
-
-        /**
-         * Convite final: moldura sobre um frame do VÍDEO (prioridade), para bater com o que o RA mostra.
-         * Se o frame do vídeo falhar, usa a foto da câmera.
-         */
-        async function createMergedImage() {
-            if (!frameImg) {
-                throw new Error('Moldura ausente');
-            }
-            let baseBlob = null;
-            if (vBlob && vBlob.size > 0) {
-                try {
-                    baseBlob = await extractVideoFrameBlob(vBlob);
-                } catch (e) {
-                    console.warn('Frame do vídeo indisponível, usando foto:', e);
-                }
-            }
-            if (!baseBlob && pBlob) {
-                baseBlob = pBlob;
-            }
-            if (!baseBlob) {
-                throw new Error('Precisa da foto ou do vídeo para montar o convite');
-            }
-            return mergeBaseImageWithFrame(baseBlob, frameImg);
-        }
-
-        document.getElementById('btn-print').onclick = async () => {
-            const finalEl = document.getElementById('final-composition');
-            try {
-                if (loader) {
-                    loader.classList.remove('hidden');
-                    const p = loader.querySelector('p');
-                    if (p) p.textContent = 'Montando imagem para impressão…';
-                }
-                const blob = await createMergedImage();
-                const url = URL.createObjectURL(blob);
-                finalEl.innerHTML = `<img src="${url}" class="print-img-fullwidth" alt="Convite: frame do vídeo com moldura">`;
-                const revoke = () => URL.revokeObjectURL(url);
-                window.addEventListener('afterprint', revoke, { once: true });
-                setTimeout(revoke, 120000);
-                window.print();
-            } catch (e) {
-                console.error(e);
-                alert('Não foi possível preparar a impressão: ' + (e && e.message ? e.message : e));
-            } finally {
-                if (loader) loader.classList.add('hidden');
-                resetLoaderText();
-            }
-        };
-
-        function waitForMindarEntity(root, timeoutMs) {
-            return new Promise((resolve, reject) => {
-                const t0 = Date.now();
-                const tick = () => {
-                    const el = root.querySelector('[mindar-image-target]');
-                    const vid = document.getElementById('v');
-                    if (el && vid) return resolve({ el, vid });
-                    if (Date.now() - t0 > timeoutMs) return reject(new Error('Timeout ao montar a cena RA'));
-                    requestAnimationFrame(tick);
-                };
-                tick();
-            });
-        }
-
-        buildBtn.onclick = async () => {
-            if (!window.MINDAR || !window.MINDAR.IMAGE || !window.MINDAR.IMAGE.Compiler) {
-                alert('Biblioteca MindAR não carregou. Verifique a conexão e recarregue a página.');
-                return;
-            }
-            if (!loader) {
-                alert('Erro interno: elemento de carregamento não encontrado.');
-                return;
-            }
-            loader.classList.remove('hidden');
-            const lp = loader.querySelector('p');
-            if (lp) lp.textContent = 'Preparando imagem…';
-            let mergedUrl = null;
-            let mindUrl = null;
-            let videoUrl = null;
-
-            try {
-                await warmUpTfWebGl();
-                await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-
-                const merged = await createMergedImage();
-                mergedUrl = URL.createObjectURL(merged);
-
-                const img = new Image();
-                img.src = mergedUrl;
-                await new Promise((r, rej) => {
-                    img.onload = () => r();
-                    img.onerror = () => rej(new Error('Imagem mesclada inválida'));
-                });
-
-                if (lp) lp.textContent = 'Compilando alvo (rápido)…';
-
-                const ratio = img.height / img.width;
-                const targetW = COMPILE_TARGET_WIDTH;
-                const c = document.createElement('canvas');
-                c.width = targetW;
-                c.height = Math.max(48, Math.round(targetW * ratio));
-                const cctx = c.getContext('2d', { alpha: false });
-                cctx.imageSmoothingEnabled = true;
-                cctx.imageSmoothingQuality = 'low';
-                cctx.drawImage(img, 0, 0, c.width, c.height);
-
-                let buffer;
-                try {
-                    buffer = await compileMindBufferFromInput(c);
-                } catch (compileErr) {
-                    console.warn('Compile com canvas falhou, tentando Image:', compileErr);
-                    if (lp) lp.textContent = 'Quase pronto…';
-                    const compileImg = await canvasToImageViaBlob(c, 0.82);
-                    buffer = await compileMindBufferFromInput(compileImg);
-                }
-
-                mindUrl = URL.createObjectURL(new Blob([buffer]));
-                videoUrl = URL.createObjectURL(vBlob);
-
-                const raView = document.getElementById('ra-view');
-                raView.classList.remove('hidden');
-                raView.setAttribute('aria-hidden', 'false');
-
-                const videoHeight = Number(ratio) || 1;
-                raView.innerHTML = `
-                    <button type="button" id="close-ra" class="close-ra-btn">Fechar</button>
-                    <a-scene
-                        mindar-image="imageTargetSrc: ${mindUrl}; autoStart: true; uiScanning: true; filterMinCF: 0.0001; filterBeta: 0.001;"
-                        embedded
-                        vr-mode-ui="enabled: false"
-                        device-orientation-permission-ui="enabled: false"
-                        renderer="colorManagement: false; antialias: false; powerPreference: high-performance">
-                        <a-assets timeout="30000">
-                            <video id="v" src="${videoUrl}" loop playsinline webkit-playsinline muted preload="auto"></video>
-                        </a-assets>
-                        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
-                        <a-entity mindar-image-target="targetIndex: 0">
-                            <a-video src="#v" width="1" height="${videoHeight}" position="0 0 0" autoplay="false"></a-video>
-                        </a-entity>
-                    </a-scene>
-                `;
-
-                document.getElementById('close-ra').onclick = () => {
-                    URL.revokeObjectURL(mindUrl);
-                    URL.revokeObjectURL(videoUrl);
-                    if (mergedUrl) URL.revokeObjectURL(mergedUrl);
-                    location.reload();
-                };
-
-                const { el: targetEntity, vid: v } = await waitForMindarEntity(raView, 8000);
-
-                const playVideo = () => {
-                    v.muted = true;
-                    const p = v.play();
-                    if (p && typeof p.catch === 'function') {
-                        p.catch(() => {});
-                    }
-                };
-
-                targetEntity.addEventListener('targetFound', playVideo);
-                targetEntity.addEventListener('targetLost', () => {
-                    v.pause();
-                });
-
-                resetLoaderText();
-                loader.classList.add('hidden');
-            } catch (err) {
-                console.error(err);
-                if (mergedUrl) URL.revokeObjectURL(mergedUrl);
-                if (mindUrl) URL.revokeObjectURL(mindUrl);
-                if (videoUrl) URL.revokeObjectURL(videoUrl);
-                alert('Erro ao processar RA: ' + (err && err.message ? err.message : err));
-                resetLoaderText();
-                loader.classList.add('hidden');
-                document.getElementById('ra-view').classList.add('hidden');
-            }
-        };
-
-        window.addEventListener('DOMContentLoaded', () => {
-            try {
-                const wall = document.getElementById('file-protocol-wall');
-                const dismissBtn = document.getElementById('btn-dismiss-file-wall');
-                if (window.location.protocol === 'file:' && wall) {
-                    wall.classList.add('is-visible');
-                    setHint('Ideal: use http://localhost — veja o aviso amarelo no topo. Abaixo a interface continua ativa.');
-                } else {
-                    setHint('Passos: moldura → foto → vídeo curto → gerar RA.');
-                }
-                if (dismissBtn && wall) {
-                    dismissBtn.onclick = () => {
-                        wall.classList.remove('is-visible');
-                        setHint(window.location.protocol === 'file:'
-                            ? 'Servidor local recomendado. Você pode testar os botões; câmera pode falhar em file://.'
-                            : 'Passos: moldura → foto → vídeo curto → gerar RA.');
-                    };
-                }
-                warmUpTfWebGl().catch(() => {});
-                if (video) {
-                    initCamera('environment').catch((e) => {
-                        console.error(e);
-                        setHint('Câmera indisponível. Abra por http://localhost ou permita a câmera no navegador.');
-                    });
-                } else {
-                    setHint('Erro: elemento de vídeo não encontrado no HTML.');
-                }
-            } catch (bootErr) {
-                console.error(bootErr);
-                if (statusHint) {
-                    statusHint.textContent = 'Erro ao iniciar: ' + (bootErr && bootErr.message ? bootErr.message : bootErr);
-                }
-            }
         });
+        return Promise.race([
+            inner,
+            new Promise(function (_, rej) { setTimeout(function () { rej(new Error('Timeout no vídeo')); }, 15000); })
+        ]);
+    }
+
+    function mergeInvite(baseBlob) {
+        return new Promise(function (resolve, reject) {
+            if (!baseBlob || !frameImage) { reject(new Error('Dados incompletos')); return; }
+            var u = URL.createObjectURL(baseBlob);
+            var img = new Image();
+            img.onload = function () {
+                try {
+                    var c = document.createElement('canvas');
+                    c.width = img.width;
+                    c.height = img.height;
+                    var x = c.getContext('2d');
+                    x.drawImage(img, 0, 0);
+                    x.drawImage(frameImage, 0, 0, c.width, c.height);
+                    c.toBlob(function (b) {
+                        URL.revokeObjectURL(u);
+                        if (!b) reject(new Error('Mescla falhou'));
+                        else resolve(b);
+                    }, 'image/jpeg', 0.9);
+                } catch (e) {
+                    URL.revokeObjectURL(u);
+                    reject(e);
+                }
+            };
+            img.onerror = function () { URL.revokeObjectURL(u); reject(new Error('Imagem base')); };
+            img.src = u;
+        });
+    }
+
+    async function buildInvitationBlob() {
+        if (!frameImage) throw new Error('Carregue a moldura.');
+        var base = null;
+        if (videoBlob && videoBlob.size) {
+            try { base = await extractVideoFrame(videoBlob); } catch (e) { console.warn(e); }
+        }
+        if (!base && photoBlob) base = photoBlob;
+        if (!base) throw new Error('Precisa de foto e vídeo.');
+        return mergeInvite(base);
+    }
+
+    function canvasToImg(canvas, q) {
+        return new Promise(function (resolve, reject) {
+            canvas.toBlob(function (blob) {
+                if (!blob) { reject(new Error('export')); return; }
+                var u = URL.createObjectURL(blob);
+                var i = new Image();
+                i.onload = function () { URL.revokeObjectURL(u); resolve(i); };
+                i.onerror = function () { URL.revokeObjectURL(u); reject(new Error('img')); };
+                i.src = u;
+            }, 'image/jpeg', q || 0.82);
+        });
+    }
+
+    async function compileMind(canvas) {
+        if (!window.MINDAR || !window.MINDAR.IMAGE || !window.MINDAR.IMAGE.Compiler) throw new Error('MindAR não carregou.');
+        var C = new window.MINDAR.IMAGE.Compiler();
+        var prog = function (p) {
+            if (loaderMsg && typeof p === 'number') {
+                var pct = (p > 0 && p <= 1) ? Math.round(p * 100) : Math.round(p);
+                loaderMsg.textContent = 'Compilando… ' + pct + '%';
+            }
+        };
+        try {
+            await C.compileImageTargets([canvas], prog);
+        } catch (e) {
+            var im = await canvasToImg(canvas, 0.82);
+            var C2 = new window.MINDAR.IMAGE.Compiler();
+            await C2.compileImageTargets([im], prog);
+            return C2.exportData();
+        }
+        return await C.exportData();
+    }
+
+    async function doPrint() {
+        var box = el('final-composition');
+        showLoader(true, 'Preparando impressão…');
+        try {
+            var blob = await buildInvitationBlob();
+            var u = URL.createObjectURL(blob);
+            if (box) box.innerHTML = '<img src="' + u + '" alt="Convite">';
+            var rev = function () { try { URL.revokeObjectURL(u); } catch (e) {} };
+            window.addEventListener('afterprint', rev, { once: true });
+            setTimeout(rev, 90000);
+            window.print();
+        } catch (e) {
+            alert('Impressão: ' + (e.message || e));
+        } finally {
+            showLoader(false);
+            if (loaderMsg) loaderMsg.textContent = 'Aguarde…';
+        }
+    }
+
+    async function doRa() {
+        if (!window.MINDAR || !window.MINDAR.IMAGE || !window.MINDAR.IMAGE.Compiler) {
+            alert('MindAR não carregou. Verifique internet e recarregue.');
+            return;
+        }
+        showLoader(true, 'Preparando RA…');
+        var mergedUrl = null, mindU = null, vidU = null;
+        try {
+            await warmTf();
+            await new Promise(function (r) { requestAnimationFrame(function () { requestAnimationFrame(r); }); });
+            var inv = await buildInvitationBlob();
+            mergedUrl = URL.createObjectURL(inv);
+            var im = new Image();
+            await new Promise(function (res, rej) {
+                im.onload = res;
+                im.onerror = function () { rej(new Error('Convite inválido')); };
+                im.src = mergedUrl;
+            });
+            var ratio = im.height / im.width;
+            var cw = COMPILE_W;
+            var ch = Math.max(40, Math.round(cw * ratio));
+            var cv = document.createElement('canvas');
+            cv.width = cw;
+            cv.height = ch;
+            var cx = cv.getContext('2d');
+            cx.imageSmoothingEnabled = true;
+            cx.imageSmoothingQuality = 'low';
+            cx.drawImage(im, 0, 0, cw, ch);
+            if (loaderMsg) loaderMsg.textContent = 'Compilando alvo…';
+            var buf = await compileMind(cv);
+            mindU = URL.createObjectURL(new Blob([buf]));
+            vidU = URL.createObjectURL(videoBlob);
+            var ra = el('ra-view');
+            if (!ra) throw new Error('DOM ra-view');
+            ra.classList.remove('hidden');
+            ra.setAttribute('aria-hidden', 'false');
+            ra.innerHTML =
+                '<button type="button" class="close-ra" id="close-ra">Fechar</button>' +
+                '<a-scene mindar-image="imageTargetSrc: ' + mindU + '; autoStart: true; uiScanning: true; filterMinCF: 0.0001; filterBeta: 0.001;" embedded vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false" renderer="antialias: false; colorManagement: false">' +
+                '<a-assets timeout="60000"><video id="v-ra" src="' + vidU + '" loop playsinline muted preload="auto"></video></a-assets>' +
+                '<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>' +
+                '<a-entity mindar-image-target="targetIndex: 0">' +
+                '<a-video src="#v-ra" width="1" height="' + ratio + '" position="0 0 0"></a-video></a-entity></a-scene>';
+            el('close-ra').onclick = function () {
+                if (mindU) URL.revokeObjectURL(mindU);
+                if (vidU) URL.revokeObjectURL(vidU);
+                if (mergedUrl) URL.revokeObjectURL(mergedUrl);
+                location.reload();
+            };
+            var ref = await new Promise(function (res, rej) {
+                var t0 = Date.now();
+                function wait() {
+                    var tgt = ra.querySelector('[mindar-image-target]');
+                    var vra = el('v-ra');
+                    if (tgt && vra) { res({ tgt: tgt, v: vra }); return; }
+                    if (Date.now() - t0 > 12000) rej(new Error('Timeout ao montar RA'));
+                    else requestAnimationFrame(wait);
+                }
+                wait();
+            });
+            (function () {
+                var tgt = ref.tgt, v = ref.v;
+                var play = function () {
+                    v.muted = true;
+                    var pr = v.play();
+                    if (pr && pr.catch) pr.catch(function () {});
+                };
+                tgt.addEventListener('targetFound', play);
+                tgt.addEventListener('targetLost', function () { v.pause(); });
+            })();
+            showLoader(false);
+        } catch (err) {
+            console.error(err);
+            if (mergedUrl) URL.revokeObjectURL(mergedUrl);
+            if (mindU) URL.revokeObjectURL(mindU);
+            if (vidU) URL.revokeObjectURL(vidU);
+            alert('RA: ' + (err.message || err));
+            showLoader(false);
+            var ra = el('ra-view');
+            if (ra) { ra.classList.add('hidden'); ra.innerHTML = ''; }
+        }
+    }
+
+    function boot() {
+        if (window.location.protocol === 'file:') {
+            var w = el('warn-file');
+            if (w) w.classList.add('show');
+            setHint('Abra via http://localhost para câmera e RA completos.');
+        } else {
+            setHint('1) Moldura → 2) Foto → 3) Vídeo → 4) Gerar RA');
+        }
+        var wd = el('warn-dismiss');
+        if (wd) wd.onclick = function () {
+            var w = el('warn-file');
+            if (w) w.classList.remove('show');
+        };
+        var bf = el('btn-flip'), inp = el('input-frame'), sn = el('snap-photo'), rec = el('record-video'), bd = el('btn-build'), pr = el('btn-print');
+        if (bf) bf.onclick = flipCamera;
+        if (inp) inp.onchange = onFrameFile;
+        if (sn) sn.onclick = takePhoto;
+        if (rec) rec.onclick = toggleRecord;
+        if (bd) bd.onclick = doRa;
+        if (pr) pr.onclick = doPrint;
+        warmTf().catch(function () {});
+        initCamera().catch(function () {});
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', boot);
+    } else {
+        boot();
+    }
+})();
     </script>
 </body>
 </html>
