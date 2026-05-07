@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="RA Studio">
+    <title>RA Studio Pro PWA</title>
+
+    <link rel="manifest" href="data:application/manifest+json;base64,ewogICJuYW1lIjogIlJBIFN0dWRpbyBQcm8iLAogICJzaG9ydF9uYW1lIjogIlJBTW9iaWxlIiwKICAic3RhcnRfdXJsIjogIi4iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiMwMDAwMDAiLAogICJ0aGVtZV9jb2xvciI6ICIjMDAwMDAwIgp9">
+
+    <script src="https://aframe.io/releases/1.4.2/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.2/dist/mindar-image-aframe.prod.js"></script>
+
+    <style>
+        :root { --ios-bg: #1c1c1e; --accent: #0a84ff; }
+        html, body {
+            height: 100%;
+            margin: 0;
+        }
+        body {
+            background-color: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            overscroll-behavior: none;
+            overflow: hidden;
+            min-height: 100vh;
+            min-height: 100dvh;
+        }
+
+        .viewport-mobile {
+            height: 70vh;
+            min-height: 0;
+            width: 100%;
+            position: relative;
+            background: #000;
+            overflow: hidden;
+            border-radius: 0 0 30px 30px;
+        }
+
+        #camera-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 1;
+            transform: scaleX(1);
+            transition: opacity 0.15s ease;
+        }
+
+        #camera-feed.mirror {
+            transform: scaleX(-1);
+        }
+
+        #frame-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+            object-fit: cover;
+            display: none;
+        }
+
+        .safe-area-top { padding-top: env(safe-area-inset-top); }
+        .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+        .btn-main {
+            width: 72px;
+            height: 72px;
+            border: 4px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.1);
+            position: relative;
+        }
+        .btn-main-inner {
+            width: 54px;
+            height: 54px;
+            background: #fff;
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+
+        .recording .btn-main-inner { background: #ff3b30; border-radius: 10px; transform: scale(0.7); animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+
+        .config-sheet {
+            background: var(--ios-bg);
+            border-radius: 30px 30px 0 0;
+            padding: 20px;
+            flex: 1;
+            min-height: 30vh;
+            margin-top: -25px;
+            position: relative;
+            z-index: 20;
+            overflow-y: auto;
+        }
+
+        .glass { background: rgba(255,255,255,0.05); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.1); }
+
+        input[type="file"] { display: none; }
+
+        @media print { .no-print { display: none !important; } .print-only { display: block !important; } }
+        .a-enter-vr { display: none !important; }
+
+        #ra-view a-scene {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Utilitários (substituem Tailwind CDN — sem aviso de “produção”) */
+        .hidden { display: none !important; }
+        .app-shell {
+            height: 100%;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .absolute { position: absolute; }
+        .fixed { position: fixed; }
+        .inset-0 { top: 0; right: 0; bottom: 0; left: 0; }
+        .top-10 { top: 2.5rem; }
+        .top-12 { top: 3rem; }
+        .right-6 { right: 1.5rem; }
+        .left-0 { left: 0; }
+        .right-0 { right: 0; }
+        .left-4 { left: 1rem; }
+        .right-4 { right: 1rem; }
+        .bottom-12 { bottom: 3rem; }
+        .z-30 { z-index: 30; }
+        .z-100 { z-index: 100; }
+        .z-200 { z-index: 200; }
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .flex-grow { flex-grow: 1; }
+        .items-center { align-items: center; }
+        .justify-center { justify-content: center; }
+        .justify-between { justify-content: space-between; }
+        .justify-around { justify-content: space-around; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-4 { gap: 1rem; }
+        .min-w-0 { min-width: 0; }
+        .w-full { width: 100%; }
+        .h-auto { height: auto; }
+        .w-10 { width: 2.5rem; }
+        .h-10 { height: 2.5rem; }
+        .w-12 { width: 3rem; }
+        .h-12 { height: 3rem; }
+        .w-5 { width: 1.25rem; }
+        .h-5 { height: 1.25rem; }
+        .w-6 { width: 1.5rem; }
+        .h-6 { height: 1.5rem; }
+        .w-2 { width: 0.5rem; }
+        .h-2 { height: 0.5rem; }
+        .h-1\.5 { height: 0.375rem; }
+        .p-2 { padding: 0.5rem; }
+        .p-4 { padding: 1rem; }
+        .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+        .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+        .px-10 { padding-left: 2.5rem; padding-right: 2.5rem; }
+        .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+        .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+        .py-4 { padding-top: 1rem; padding-bottom: 1rem; }
+        .px-4 { padding-left: 1rem; padding-right: 1rem; }
+        .px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
+        .mt-2 { margin-top: 0.5rem; }
+        .mt-4 { margin-top: 1rem; }
+        .mb-6 { margin-bottom: 1.5rem; }
+        .mx-auto { margin-left: auto; margin-right: auto; }
+        .rounded-full { border-radius: 9999px; }
+        .rounded-2xl { border-radius: 1rem; }
+        .rounded-xl { border-radius: 0.75rem; }
+        .text-center { text-align: center; }
+        .text-xs { font-size: 0.75rem; line-height: 1rem; }
+        .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
+        .text-10 { font-size: 10px; line-height: 1.25; }
+        .font-bold { font-weight: 700; }
+        .font-black { font-weight: 900; }
+        .uppercase { text-transform: uppercase; }
+        .tracking-widest { letter-spacing: 0.1em; }
+        .tracking-wide-ui { letter-spacing: 0.3em; }
+        .opacity-50 { opacity: 0.5; }
+        .text-gray-400 { color: #9ca3af; }
+        .text-gray-500 { color: #6b7280; }
+        .text-blue-400 { color: #60a5fa; }
+        .text-blue-500 { color: #3b82f6; }
+        .bg-red-500 { background-color: #ef4444; }
+        .bg-green-500 { background-color: #22c55e; }
+        .bg-black { background-color: #000; }
+        .bg-white { background-color: #fff; }
+        .text-black { color: #000; }
+        .bg-gray-800 { background-color: #1f2937; }
+        .border { border-width: 1px; border-style: solid; }
+        .border-4 { border-width: 4px; }
+        .border-white-10 { border-color: rgba(255,255,255,0.1); }
+        .border-white-20 { border-color: rgba(255,255,255,0.2); }
+        .border-t-blue-500 { border-top-color: #3b82f6; }
+        .border-blue-500-20 { border-color: rgba(59,130,246,0.2); }
+        .bg-white-20 { background-color: rgba(255,255,255,0.2); }
+        .bg-white-10a { background-color: rgba(255,255,255,0.1); }
+        .bg-blue-500-20 { background-color: rgba(59,130,246,0.2); }
+        .bg-white-20-bar { background-color: rgba(255,255,255,0.2); }
+        .truncate {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .cursor-pointer { cursor: pointer; }
+        .transition-all { transition-property: all; transition-timing-function: cubic-bezier(0.4,0,0.2,1); transition-duration: 150ms; }
+        label.upload-row:active { background: rgba(255,255,255,0.1); }
+        .space-y-3 > * + * { margin-top: 0.75rem; }
+        .backdrop-blur-lg { backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+        .min-h-screen { min-height: 100vh; }
+        .dot-frame--ok {
+            box-shadow: 0 0 10px #22c55e;
+        }
+        .btn-build:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        .loader-spin {
+            width: 3rem;
+            height: 3rem;
+            border: 4px solid rgba(59,130,246,0.2);
+            border-top-color: #3b82f6;
+            border-radius: 9999px;
+            animation: spin 1s linear infinite;
+        }
+        .close-ra-btn {
+            position: fixed;
+            top: 3rem;
+            right: 1.5rem;
+            z-index: 200;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 0.5rem 1rem;
+            border-radius: 0.75rem;
+            font-size: 10px;
+            font-weight: 700;
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            cursor: pointer;
+        }
+        .print-img-fullwidth {
+            width: 100%;
+            height: auto;
+        }
+
+        /* Aviso file:// — no fluxo da página (empurra a UI para baixo, nada fica “por baixo”) */
+        #file-protocol-wall {
+            display: none;
+            flex-shrink: 0;
+            background: linear-gradient(180deg, #2d1f00 0%, #1a1200 100%);
+            color: #fff;
+            padding: 0.75rem 1rem;
+            padding-top: max(0.75rem, env(safe-area-inset-top));
+            font-size: 12px;
+            line-height: 1.45;
+            border-bottom: 1px solid rgba(251, 191, 36, 0.4);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+        }
+        #file-protocol-wall.is-visible {
+            display: block;
+        }
+        #file-protocol-wall h2 {
+            font-size: 0.85rem;
+            margin: 0 0 0.35rem;
+            color: #fcd34d;
+        }
+        #file-protocol-wall code {
+            display: block;
+            background: #0c0a09;
+            padding: 0.5rem 0.65rem;
+            border-radius: 6px;
+            margin: 0.4rem 0;
+            font-size: 11px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        #file-protocol-wall .file-wall-actions {
+            margin-top: 0.5rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            align-items: center;
+        }
+        #file-protocol-wall button {
+            font: inherit;
+            cursor: pointer;
+            padding: 0.4rem 0.75rem;
+            border-radius: 8px;
+            border: none;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        #btn-dismiss-file-wall {
+            background: #fbbf24;
+            color: #1c1917;
+        }
+        #file-protocol-wall .note {
+            margin-top: 0.35rem;
+            font-size: 10px;
+            color: #a8a29e;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print" style="display:flex;flex-direction:column;min-height:100%;min-height:100dvh;">
+    <div id="file-protocol-wall" role="alert" aria-live="polite">
+        <h2>Câmera e RA precisam de http://localhost (recomendado)</h2>
+        <p>Você abriu o arquivo direto do disco (<code>file://</code>). A câmera e o A-Frame costumam falhar assim. Use um servidor local:</p>
+        <code>cd pasta-do-projeto
+python -m http.server 8080</code>
+        <p>Depois abra <strong>http://localhost:8080</strong> no navegador.</p>
+        <div class="file-wall-actions">
+            <button type="button" id="btn-dismiss-file-wall">Ok, continuar assim mesmo</button>
+            <span class="note">A interface aparece abaixo; a câmera pode não funcionar.</span>
+        </div>
+    </div>
+
+    <div class="app-shell">
+        <div class="viewport-mobile">
+            <video id="camera-feed" autoplay playsinline muted></video>
+            <img id="frame-overlay" src="" alt="Moldura">
+
+            <div class="absolute top-10 left-4 right-4 flex justify-between z-30 safe-area-top">
+                <div class="flex gap-2">
+                    <div class="glass px-3 py-1 rounded-full text-10 font-bold flex items-center gap-2">
+                        <div id="dot-frame" class="w-2 h-2 rounded-full bg-red-500"></div> MOLDURA
+                    </div>
+                </div>
+                <button type="button" id="btn-flip" class="glass w-10 h-10 rounded-full flex items-center justify-center" aria-label="Trocar câmera">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-width="2" stroke-linecap="round"/></svg>
+                </button>
+            </div>
+
+            <div class="absolute bottom-12 left-0 right-0 flex justify-around items-center z-30 px-10">
+                <div class="text-center recording-wrap">
+                    <button type="button" id="snap-photo" class="btn-main"><div class="btn-main-inner"></div></button>
+                    <p class="text-10 mt-2 font-bold opacity-50 uppercase">Foto</p>
+                </div>
+                <div class="text-center recording-wrap">
+                    <button type="button" id="record-video" class="btn-main"><div id="rec-status" class="btn-main-inner bg-red-500"></div></button>
+                    <p class="text-10 mt-2 font-bold opacity-50 uppercase">Vídeo RA</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="config-sheet safe-area-bottom">
+            <div class="w-10 h-1.5 bg-white-20-bar rounded-full mx-auto mb-6"></div>
+
+            <div class="space-y-3">
+                <label for="input-frame" class="upload-row flex items-center gap-4 p-4 glass rounded-2xl cursor-pointer">
+                    <div class="w-10 h-10 rounded-full bg-blue-500-20 flex items-center justify-center text-blue-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-width="2"/></svg>
+                    </div>
+                    <div class="flex-grow min-w-0">
+                        <h4 class="text-sm font-bold">Moldura PNG (Retrato)</h4>
+                        <p id="label-frame" class="text-10 text-gray-400 truncate">Escolha um arquivo</p>
+                    </div>
+                    <input type="file" id="input-frame" accept="image/png,image/*">
+                </label>
+
+                <p id="status-hint" class="text-10 text-gray-500 px-1">Passos: moldura → foto → vídeo curto → gerar RA.</p>
+
+                <button type="button" id="btn-build" disabled class="w-full py-4 rounded-2xl bg-gray-800 text-gray-500 font-black uppercase text-xs tracking-widest transition-all btn-build">
+                    Aguardando dados
+                </button>
+
+                <button type="button" id="btn-print" class="hidden w-full py-3 rounded-2xl border border-white-10 text-10 font-bold uppercase">
+                    Imprimir convite
+                </button>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <div id="ra-view" class="fixed inset-0 z-100 hidden bg-black" aria-hidden="true"></div>
+
+    <div id="loader" class="hidden fixed inset-0 z-200 bg-black flex flex-col items-center justify-center">
+        <div class="loader-spin" aria-hidden="true"></div>
+        <p class="text-10 font-bold mt-4 tracking-wide-ui text-blue-500 uppercase text-center px-6">Processando…<br>Isso pode levar um momento</p>
+    </div>
+
+    <div class="print-only hidden p-2 bg-white text-black min-h-screen">
+        <div id="final-composition" class="w-full"></div>
+    </div>
+
+    <script>
+        if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+            window.addEventListener('load', () => {
+                try {
+                    const swCode = `
+                        const CACHE_NAME = 'ra-studio-v2';
+                        self.addEventListener('install', e => e.waitUntil(caches.open(CACHE_NAME)));
+                        self.addEventListener('fetch', e => e.respondWith(caches.match(e.request).then(r => r || fetch(e.request))));
+                    `;
+                    const blob = new Blob([swCode], { type: 'application/javascript' });
+                    const swUrl = URL.createObjectURL(blob);
+                    if (!window.location.href.includes('usercontent.goog')) {
+                        navigator.serviceWorker.register(swUrl).catch(() => {});
+                    }
+                } catch (e) {
+                    console.warn('Service Worker ignorado:', e);
+                }
+            });
+        }
+
+        const video = document.getElementById('camera-feed');
+        const overlay = document.getElementById('frame-overlay');
+        const buildBtn = document.getElementById('btn-build');
+        const loader = document.getElementById('loader');
+        const statusHint = document.getElementById('status-hint');
+
+        function resetLoaderText() {
+            if (!loader) return;
+            const p = loader.querySelector('p');
+            if (p) p.innerHTML = 'Processando…<br>Isso pode levar um momento';
+        }
+
+        /** Largura máxima enviada ao MindAR — menor = compilação bem mais rápida (menos pixels no TF). Impressão continua em resolução cheia. */
+        const COMPILE_TARGET_WIDTH = 384;
+
+        /** Preferir GPU no TensorFlow (compilação) para reduzir tempo em desktop e vários celulares. */
+        async function warmUpTfWebGl() {
+            const tf = window.tf;
+            if (!tf || typeof tf.setBackend !== 'function') return;
+            try {
+                await tf.setBackend('webgl');
+                await tf.ready();
+            } catch (e) {
+                try {
+                    await tf.setBackend('cpu');
+                    await tf.ready();
+                } catch (e2) { /* noop */ }
+            }
+        }
+
+        function mindarProgressCb(progress) {
+            if (!loader || typeof progress !== 'number') return;
+            const p = loader.querySelector('p');
+            if (p) {
+                const pct = progress > 0 && progress <= 1 ? Math.round(progress * 100) : Math.round(progress);
+                p.textContent = 'Compilando alvo… ' + pct + '%';
+            }
+        }
+
+        async function compileMindBufferFromInput(input) {
+            const compiler = new window.MINDAR.IMAGE.Compiler();
+            await compiler.compileImageTargets([input], mindarProgressCb);
+            return compiler.exportData();
+        }
+
+        /** Converte canvas em Image via blob (evita toDataURL — strings gigantes deixam tudo lento). */
+        function canvasToImageViaBlob(canvas, quality) {
+            return new Promise((resolve, reject) => {
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        reject(new Error('Falha ao exportar imagem'));
+                        return;
+                    }
+                    const url = URL.createObjectURL(blob);
+                    const im = new Image();
+                    im.onload = () => {
+                        URL.revokeObjectURL(url);
+                        resolve(im);
+                    };
+                    im.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        reject(new Error('Falha ao carregar preview'));
+                    };
+                    im.src = url;
+                }, 'image/jpeg', quality);
+            });
+        }
+
+        let mediaStream = null;
+        let mediaRecorder = null;
+        let chunks = [];
+        let pBlob = null;
+        let vBlob = null;
+        let frameImg = null;
+        let mode = 'environment';
+        let recording = false;
+
+        const recordWrap = document.querySelector('#record-video')?.closest('.recording-wrap') ?? null;
+
+        function setHint(text) {
+            if (statusHint) statusHint.textContent = text;
+        }
+
+        function pickRecorderMime() {
+            const candidates = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus',
+                'video/webm',
+                'video/mp4',
+            ];
+            for (const c of candidates) {
+                if (window.MediaRecorder && MediaRecorder.isTypeSupported(c)) return c;
+            }
+            return '';
+        }
+
+        async function initCamera(facing) {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(t => t.stop());
+                mediaStream = null;
+            }
+            const want = facing || mode;
+            try {
+                mediaStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: want,
+                        width: { ideal: 1080 },
+                        height: { ideal: 1920 },
+                    },
+                    audio: true,
+                });
+            } catch (e) {
+                console.warn('getUserMedia com áudio falhou, tentando só vídeo:', e);
+                try {
+                    mediaStream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: want },
+                    });
+                } catch (err) {
+                    console.error(err);
+                    alert('Permita o uso da câmera (HTTPS ou localhost). No iPhone use Safari.');
+                    return;
+                }
+            }
+
+            video.srcObject = mediaStream;
+            mode = want;
+            video.classList.toggle('mirror', mode === 'user');
+            try {
+                await video.play();
+            } catch (e) {
+                console.warn('video.play():', e);
+            }
+        }
+
+        function updateBuildUi() {
+            if (!buildBtn) return;
+            const ready = !!(pBlob && vBlob && frameImg);
+            buildBtn.disabled = !ready;
+            if (ready) {
+                buildBtn.className = 'w-full py-4 rounded-2xl bg-white text-black font-black uppercase text-xs tracking-widest transition-all btn-build btn-build--ready';
+                buildBtn.textContent = 'Gerar experiência RA';
+                document.getElementById('btn-print').classList.remove('hidden');
+                setHint('Tudo pronto. Toque em gerar RA ou imprimir o convite.');
+            } else {
+                buildBtn.className = 'w-full py-4 rounded-2xl bg-gray-800 text-gray-500 font-black uppercase text-xs tracking-widest transition-all btn-build';
+                buildBtn.textContent = 'Aguardando dados';
+            }
+        }
+
+        function checkStatus() {
+            updateBuildUi();
+        }
+
+        document.getElementById('btn-flip').onclick = () => {
+            if (recording) {
+                alert('Pare a gravação antes de trocar a câmera.');
+                return;
+            }
+            initCamera(mode === 'environment' ? 'user' : 'environment');
+        };
+
+        document.getElementById('input-frame').onchange = (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const dataUrl = ev.target.result;
+                overlay.src = dataUrl;
+                overlay.style.display = 'block';
+                frameImg = new Image();
+                frameImg.onload = () => checkStatus();
+                frameImg.onerror = () => {
+                    frameImg = null;
+                    alert('Não foi possível carregar a moldura.');
+                    checkStatus();
+                };
+                frameImg.src = dataUrl;
+                document.getElementById('label-frame').innerText = file.name || 'Moldura pronta';
+                document.getElementById('dot-frame').className = 'w-2 h-2 rounded-full bg-green-500 dot-frame--ok';
+                setHint('Agora capture a foto com a moldura na cena.');
+                checkStatus();
+            };
+            reader.readAsDataURL(file);
+        };
+
+        document.getElementById('snap-photo').onclick = () => {
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            if (!w || !h) {
+                alert('Câmera ainda não está pronta. Aguarde um instante e tente de novo.');
+                return;
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            if (mode === 'user') {
+                ctx.translate(canvas.width, 0);
+                ctx.scale(-1, 1);
+            }
+            ctx.drawImage(video, 0, 0);
+            canvas.toBlob((b) => {
+                if (!b) {
+                    alert('Falha ao gerar a foto.');
+                    return;
+                }
+                pBlob = b;
+                checkStatus();
+                video.style.opacity = '0.5';
+                setTimeout(() => { video.style.opacity = '1'; }, 120);
+                setHint('Ótimo. Grave um vídeo curto para o RA (toque de novo para parar).');
+            }, 'image/jpeg', 0.95);
+        };
+
+        document.getElementById('record-video').onclick = function () {
+            if (!mediaStream) {
+                alert('Câmera não está ativa.');
+                return;
+            }
+            if (typeof MediaRecorder === 'undefined') {
+                alert('Seu navegador não suporta gravação (MediaRecorder). Tente Chrome ou Safari atualizado.');
+                return;
+            }
+
+            if (!recording) {
+                chunks = [];
+                const mime = pickRecorderMime();
+                const options = mime ? { mimeType: mime } : {};
+                try {
+                    mediaRecorder = new MediaRecorder(mediaStream, options);
+                } catch (err) {
+                    console.error(err);
+                    try {
+                        mediaRecorder = new MediaRecorder(mediaStream);
+                    } catch (e2) {
+                        alert('Não foi possível iniciar a gravação neste aparelho.');
+                        return;
+                    }
+                }
+
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) chunks.push(e.data);
+                };
+                mediaRecorder.onstop = () => {
+                    const outType = (mediaRecorder && mediaRecorder.mimeType) || mime || 'video/webm';
+                    vBlob = new Blob(chunks, { type: outType });
+                    recording = false;
+                    if (recordWrap) recordWrap.classList.remove('recording');
+                    checkStatus();
+                    if (!chunks.length) {
+                        alert('Nenhum dado de vídeo foi gravado. Tente outra vez.');
+                    }
+                };
+
+                mediaRecorder.start(250);
+                recording = true;
+                if (recordWrap) recordWrap.classList.add('recording');
+            } else {
+                if (mediaRecorder && mediaRecorder.state === 'recording') {
+                    mediaRecorder.stop();
+                } else {
+                    recording = false;
+                    if (recordWrap) recordWrap.classList.remove('recording');
+                }
+            }
+        };
+
+        function createMergedImage() {
+            return new Promise((resolve, reject) => {
+                if (!pBlob || !frameImg) {
+                    reject(new Error('Foto ou moldura ausente'));
+                    return;
+                }
+                const img = new Image();
+                const photoUrl = URL.createObjectURL(pBlob);
+                img.onload = () => {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = img.width;
+                        canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0);
+                        ctx.drawImage(frameImg, 0, 0, canvas.width, canvas.height);
+                        canvas.toBlob((blob) => {
+                            URL.revokeObjectURL(photoUrl);
+                            if (!blob) reject(new Error('Falha ao mesclar imagem'));
+                            else resolve(blob);
+                        }, 'image/jpeg', 0.92);
+                    } catch (e) {
+                        URL.revokeObjectURL(photoUrl);
+                        reject(e);
+                    }
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(photoUrl);
+                    reject(new Error('Foto inválida'));
+                };
+                img.src = photoUrl;
+            });
+        }
+
+        document.getElementById('btn-print').onclick = async () => {
+            try {
+                const blob = await createMergedImage();
+                const url = URL.createObjectURL(blob);
+                document.getElementById('final-composition').innerHTML = `<img src="${url}" class="print-img-fullwidth" alt="Convite">`;
+                window.print();
+            } catch (e) {
+                console.error(e);
+                alert('Não foi possível preparar a impressão.');
+            }
+        };
+
+        function waitForMindarEntity(root, timeoutMs) {
+            return new Promise((resolve, reject) => {
+                const t0 = Date.now();
+                const tick = () => {
+                    const el = root.querySelector('[mindar-image-target]');
+                    const vid = document.getElementById('v');
+                    if (el && vid) return resolve({ el, vid });
+                    if (Date.now() - t0 > timeoutMs) return reject(new Error('Timeout ao montar a cena RA'));
+                    requestAnimationFrame(tick);
+                };
+                tick();
+            });
+        }
+
+        buildBtn.onclick = async () => {
+            if (!window.MINDAR || !window.MINDAR.IMAGE || !window.MINDAR.IMAGE.Compiler) {
+                alert('Biblioteca MindAR não carregou. Verifique a conexão e recarregue a página.');
+                return;
+            }
+            if (!loader) {
+                alert('Erro interno: elemento de carregamento não encontrado.');
+                return;
+            }
+            loader.classList.remove('hidden');
+            const lp = loader.querySelector('p');
+            if (lp) lp.textContent = 'Preparando imagem…';
+            let mergedUrl = null;
+            let mindUrl = null;
+            let videoUrl = null;
+
+            try {
+                await warmUpTfWebGl();
+                await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
+                const merged = await createMergedImage();
+                mergedUrl = URL.createObjectURL(merged);
+
+                const img = new Image();
+                img.src = mergedUrl;
+                await new Promise((r, rej) => {
+                    img.onload = () => r();
+                    img.onerror = () => rej(new Error('Imagem mesclada inválida'));
+                });
+
+                if (lp) lp.textContent = 'Compilando alvo (rápido)…';
+
+                const ratio = img.height / img.width;
+                const targetW = COMPILE_TARGET_WIDTH;
+                const c = document.createElement('canvas');
+                c.width = targetW;
+                c.height = Math.max(48, Math.round(targetW * ratio));
+                const cctx = c.getContext('2d', { alpha: false });
+                cctx.imageSmoothingEnabled = true;
+                cctx.imageSmoothingQuality = 'low';
+                cctx.drawImage(img, 0, 0, c.width, c.height);
+
+                let buffer;
+                try {
+                    buffer = await compileMindBufferFromInput(c);
+                } catch (compileErr) {
+                    console.warn('Compile com canvas falhou, tentando Image:', compileErr);
+                    if (lp) lp.textContent = 'Quase pronto…';
+                    const compileImg = await canvasToImageViaBlob(c, 0.82);
+                    buffer = await compileMindBufferFromInput(compileImg);
+                }
+
+                mindUrl = URL.createObjectURL(new Blob([buffer]));
+                videoUrl = URL.createObjectURL(vBlob);
+
+                const raView = document.getElementById('ra-view');
+                raView.classList.remove('hidden');
+                raView.setAttribute('aria-hidden', 'false');
+
+                const videoHeight = Number(ratio) || 1;
+                raView.innerHTML = `
+                    <button type="button" id="close-ra" class="close-ra-btn">Fechar</button>
+                    <a-scene
+                        mindar-image="imageTargetSrc: ${mindUrl}; autoStart: true; uiScanning: true; filterMinCF: 0.0001; filterBeta: 0.001;"
+                        embedded
+                        vr-mode-ui="enabled: false"
+                        device-orientation-permission-ui="enabled: false"
+                        renderer="colorManagement: false; antialias: false; powerPreference: high-performance">
+                        <a-assets timeout="30000">
+                            <video id="v" src="${videoUrl}" loop playsinline webkit-playsinline muted preload="auto"></video>
+                        </a-assets>
+                        <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+                        <a-entity mindar-image-target="targetIndex: 0">
+                            <a-video src="#v" width="1" height="${videoHeight}" position="0 0 0" autoplay="false"></a-video>
+                        </a-entity>
+                    </a-scene>
+                `;
+
+                document.getElementById('close-ra').onclick = () => {
+                    URL.revokeObjectURL(mindUrl);
+                    URL.revokeObjectURL(videoUrl);
+                    if (mergedUrl) URL.revokeObjectURL(mergedUrl);
+                    location.reload();
+                };
+
+                const { el: targetEntity, vid: v } = await waitForMindarEntity(raView, 8000);
+
+                const playVideo = () => {
+                    v.muted = true;
+                    const p = v.play();
+                    if (p && typeof p.catch === 'function') {
+                        p.catch(() => {});
+                    }
+                };
+
+                targetEntity.addEventListener('targetFound', playVideo);
+                targetEntity.addEventListener('targetLost', () => {
+                    v.pause();
+                });
+
+                resetLoaderText();
+                loader.classList.add('hidden');
+            } catch (err) {
+                console.error(err);
+                if (mergedUrl) URL.revokeObjectURL(mergedUrl);
+                if (mindUrl) URL.revokeObjectURL(mindUrl);
+                if (videoUrl) URL.revokeObjectURL(videoUrl);
+                alert('Erro ao processar RA: ' + (err && err.message ? err.message : err));
+                resetLoaderText();
+                loader.classList.add('hidden');
+                document.getElementById('ra-view').classList.add('hidden');
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                const wall = document.getElementById('file-protocol-wall');
+                const dismissBtn = document.getElementById('btn-dismiss-file-wall');
+                if (window.location.protocol === 'file:' && wall) {
+                    wall.classList.add('is-visible');
+                    setHint('Ideal: use http://localhost — veja o aviso amarelo no topo. Abaixo a interface continua ativa.');
+                } else {
+                    setHint('Passos: moldura → foto → vídeo curto → gerar RA.');
+                }
+                if (dismissBtn && wall) {
+                    dismissBtn.onclick = () => {
+                        wall.classList.remove('is-visible');
+                        setHint(window.location.protocol === 'file:'
+                            ? 'Servidor local recomendado. Você pode testar os botões; câmera pode falhar em file://.'
+                            : 'Passos: moldura → foto → vídeo curto → gerar RA.');
+                    };
+                }
+                warmUpTfWebGl().catch(() => {});
+                if (video) {
+                    initCamera('environment').catch((e) => {
+                        console.error(e);
+                        setHint('Câmera indisponível. Abra por http://localhost ou permita a câmera no navegador.');
+                    });
+                } else {
+                    setHint('Erro: elemento de vídeo não encontrado no HTML.');
+                }
+            } catch (bootErr) {
+                console.error(bootErr);
+                if (statusHint) {
+                    statusHint.textContent = 'Erro ao iniciar: ' + (bootErr && bootErr.message ? bootErr.message : bootErr);
+                }
+            }
+        });
+    </script>
+</body>
+</html>
